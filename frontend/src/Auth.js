@@ -85,7 +85,7 @@ const ComponenteVotacion = ({ usuario, onVolver }) => {
         body: JSON.stringify({
           cedula: usuario?.cedula || '',
           eleccionId: eleccionSeleccionada?.id || 1,
-          mesaId: 1,
+          mesaId: usuario?.mesaId || 1,
           votoEnBlanco: votoEnBlanco,
           listaId: votoEnBlanco ? null : listaSeleccionada
         })
@@ -376,11 +376,8 @@ const ComponenteVotacion = ({ usuario, onVolver }) => {
 };
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     cedula: '',
-    nombre: '',
-    email: '',
     departamentoId: '',
     circuitoId: ''
   });
@@ -393,29 +390,27 @@ const Auth = () => {
 
   const API_URL = 'http://localhost:8080/api';
 
-  // Cargar departamentos al montar el componente (solo para registro)
+  //SE SELEIONA EL DEPARTAMENTO
   useEffect(() => {
-    if (!isLogin) {
-      const fetchDepartamentos = async () => {
-        try {
-          const response = await fetch(`${API_URL}/circuito/departamentos`);
-          const data = await response.json();
-          if (data.success) {
-            setDepartamentos(data.departamentos);
-          }
-        } catch (error) {
-          console.error('Error al cargar departamentos:', error);
+    const fetchDepartamentos = async () => {
+      try {
+        const response = await fetch(`${API_URL}/circuito/departamentos`);
+        const data = await response.json();
+        if (data.success) {
+          setDepartamentos(data.departamentos);
         }
-      };
-      
-      fetchDepartamentos();
-    }
-  }, [isLogin]);
+      } catch (error) {
+        console.error('Error al cargar departamentos:', error);
+      }
+    };
+    
+    fetchDepartamentos();
+  }, []);
 
-  // Cargar circuitos cuando cambia el departamento
+// SE SELECCIONA EL CIRCUITO DEPENDIENDO DEL DEPARTAMENTO
   useEffect(() => {
     const fetchCircuitos = async () => {
-      if (formData.departamentoId && !isLogin) {
+      if (formData.departamentoId) {
         try {
           const response = await fetch(`${API_URL}/circuito/departamento/${formData.departamentoId}`);
           const data = await response.json();
@@ -428,14 +423,13 @@ const Auth = () => {
       } else {
         setCircuitos([]);
       }
-      // Limpiar circuito seleccionado cuando cambia departamento
+      //DEPENDE DE DONDE ESTE, LO QUE SE MUESTRA
       setFormData(prev => ({ ...prev, circuitoId: '' }));
     };
     
     fetchCircuitos();
-  }, [formData.departamentoId, isLogin]);
+  }, [formData.departamentoId]);
 
-  // Validación de cédula uruguaya
   const validarCedulaUruguaya = (cedula) => {
     const cedulaLimpia = cedula.replace(/[.-]/g, '');
     
@@ -459,7 +453,6 @@ const Auth = () => {
     return digitoVerificador === verificador;
   };
 
-  // Formatear cédula con puntos y guión
   const formatearCedula = (value) => {
     const numeros = value.replace(/\D/g, '');
     
@@ -493,49 +486,47 @@ const Auth = () => {
       return;
     }
 
-    try {
-      const endpoint = isLogin ? '/login' : '/register';
-      const data = isLogin 
-        ? { cedula: formData.cedula.replace(/[.-]/g, '') }
-        : { 
-            cedula: formData.cedula.replace(/[.-]/g, ''), 
-            nombre: formData.nombre.trim(),
-            email: formData.email.trim(),
-            circuitoId: formData.circuitoId || null
-          };
+    if (!formData.circuitoId) {
+      setMessage('Debes seleccionar tu circuito electoral para votar');
+      setLoading(false);
+      return;
+    }
 
-      const response = await fetch(`${API_URL}${endpoint}`, {
+    try {
+      const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          cedula: formData.cedula.replace(/[.-]/g, ''),
+          circuitoId: formData.circuitoId
+        })
       });
       
       const result = await response.json();
       
       if (result.success) {
-        if (isLogin) {
-          setMessage(`¡Bienvenido, ${result.nombre}!`);
-          setUsuarioLogueado({
-            cedula: formData.cedula.replace(/[.-]/g, ''),
-            nombre: result.nombre,
-            email: result.email,
-            circuito: result.circuito
-          });
-        } else {
-          setMessage('¡Registro exitoso! Ya puedes iniciar sesión.');
-          setFormData({
-            cedula: '',
-            nombre: '',
-            email: '',
-            departamentoId: '',
-            circuitoId: ''
-          });
-          setIsLogin(true);
-        }
+        setMessage(`¡Bienvenido, ${result.nombre}!`);
+        
+        // Buscar información del circuito seleccionado
+        const circuitoSeleccionado = circuitos.find(c => c.id.toString() === formData.circuitoId);
+        const departamentoSeleccionado = departamentos.find(d => d.id.toString() === formData.departamentoId);
+        
+        setUsuarioLogueado({
+          cedula: formData.cedula.replace(/[.-]/g, ''),
+          nombre: result.nombre,
+          email: result.email,
+          circuito: {
+            id: circuitoSeleccionado?.id,
+            nombre: circuitoSeleccionado?.nombre,
+            numero: circuitoSeleccionado?.numero,
+            departamento: departamentoSeleccionado?.nombre
+          },
+          mesaId: result.mesaId || 1
+        });
       } else {
-        setMessage(result.message || 'Error en la operación');
+        setMessage(result.message || 'Error en el login');
       }
     } catch (error) {
       setMessage('Error de conexión. Verifica que el backend esté corriendo en el puerto 8080');
@@ -554,27 +545,9 @@ const Auth = () => {
     setMessage('');
     setFormData({
       cedula: '',
-      nombre: '',
-      email: '',
       departamentoId: '',
       circuitoId: ''
     });
-  };
-
-  const resetForm = () => {
-    setFormData({
-      cedula: '',
-      nombre: '',
-      email: '',
-      departamentoId: '',
-      circuitoId: ''
-    });
-    setMessage('');
-  };
-
-  const toggleMode = () => {
-    setIsLogin(!isLogin);
-    resetForm();
   };
 
   // Si el usuario está logueado y quiere votar, mostrar componente de votación
@@ -606,17 +579,27 @@ const Auth = () => {
             ¡Bienvenido, {usuarioLogueado.nombre}!
           </h2>
           
-          <p style={{ color: '#666', marginBottom: '30px' }}>
-            Cédula: {usuarioLogueado.cedula}
+          <div style={{ 
+            backgroundColor: '#f8f9fa', 
+            padding: '15px', 
+            borderRadius: '8px', 
+            marginBottom: '30px',
+            textAlign: 'left'
+          }}>
+            <p style={{ margin: '0 0 8px 0', color: '#666' }}>
+              <strong>Cédula:</strong> {usuarioLogueado.cedula}
+            </p>
             {usuarioLogueado.circuito && (
               <>
-                <br />
-                Circuito: {usuarioLogueado.circuito.nombre}
-                <br />
-                Departamento: {usuarioLogueado.circuito.departamento}
+                <p style={{ margin: '0 0 8px 0', color: '#666' }}>
+                  <strong>Departamento:</strong> {usuarioLogueado.circuito.departamento}
+                </p>
+                <p style={{ margin: '0', color: '#666' }}>
+                  <strong>Circuito:</strong> {usuarioLogueado.circuito.numero} - {usuarioLogueado.circuito.nombre}
+                </p>
               </>
             )}
-          </p>
+          </div>
 
           <button 
             onClick={manejarVotar}
@@ -674,50 +657,11 @@ const Auth = () => {
       }}>
         <div className="auth-header" style={{ textAlign: 'center', marginBottom: '30px' }}>
           <h2 style={{ color: '#333', marginBottom: '8px' }}>
-            {isLogin ? 'Iniciar Sesión' : 'Registrarse'}
+            Iniciar Sesión para Votar
           </h2>
           <p style={{ color: '#666', margin: '0' }}>
-            Sistema de autenticación con cédula uruguaya
+            Ingresa tu cédula y selecciona tu circuito electoral
           </p>
-        </div>
-
-        <div className="auth-tabs" style={{ 
-          display: 'flex', 
-          marginBottom: '30px',
-          borderBottom: '1px solid #eee'
-        }}>
-          <button 
-            className={isLogin ? 'tab active' : 'tab'}
-            onClick={toggleMode}
-            style={{
-              flex: 1,
-              padding: '12px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: isLogin ? '#007bff' : '#666',
-              borderBottom: isLogin ? '2px solid #007bff' : '2px solid transparent',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}
-          >
-            Iniciar Sesión
-          </button>
-          <button 
-            className={!isLogin ? 'tab active' : 'tab'}
-            onClick={toggleMode}
-            style={{
-              flex: 1,
-              padding: '12px',
-              border: 'none',
-              backgroundColor: 'transparent',
-              color: !isLogin ? '#007bff' : '#666',
-              borderBottom: !isLogin ? '2px solid #007bff' : '2px solid transparent',
-              cursor: 'pointer',
-              fontSize: '16px'
-            }}
-          >
-            Registrarse
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -729,7 +673,7 @@ const Auth = () => {
               fontSize: '14px',
               fontWeight: '500'
             }}>
-              Cédula de Identidad
+              Cédula de Identidad *
             </label>
             <input
               type="text"
@@ -758,136 +702,84 @@ const Auth = () => {
             </small>
           </div>
 
-          {!isLogin && (
-            <>
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label htmlFor="nombre" style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  color: '#333',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}>
-                  Nombre Completo
-                </label>
-                <input
-                  type="text"
-                  id="nombre"
-                  name="nombre"
-                  value={formData.nombre}
-                  onChange={handleChange}
-                  placeholder="Tu nombre completo"
-                  required
-                  className="form-input"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '6px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
+          <div className="form-group" style={{ marginBottom: '20px' }}>
+            <label htmlFor="departamentoId" style={{ 
+              display: 'block', 
+              marginBottom: '8px', 
+              color: '#333',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              Departamento *
+            </label>
+            <select
+              id="departamentoId"
+              name="departamentoId"
+              value={formData.departamentoId}
+              onChange={handleChange}
+              required
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '16px',
+                backgroundColor: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="">Selecciona tu departamento</option>
+              {departamentos.map(dept => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
 
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label htmlFor="email" style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  color: '#333',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}>
-                  Email
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="tu@email.com"
-                  required
-                  className="form-input"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '6px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label htmlFor="departamentoId" style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  color: '#333',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}>
-                  Departamento
-                </label>
-                <select
-                  id="departamentoId"
-                  name="departamentoId"
-                  value={formData.departamentoId}
-                  onChange={handleChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '6px',
-                    fontSize: '16px',
-                    backgroundColor: 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="">Selecciona un departamento</option>
-                  {departamentos.map(dept => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {formData.departamentoId && (
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label htmlFor="circuitoId" style={{ 
-                    display: 'block', 
-                    marginBottom: '8px', 
-                    color: '#333',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}>
-                    Circuito Electoral
-                  </label>
-                  <select
-                    id="circuitoId"
-                    name="circuitoId"
-                    value={formData.circuitoId}
-                    onChange={handleChange}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      border: '1px solid #ddd',
-                      borderRadius: '6px',
-                      fontSize: '16px',
-                      backgroundColor: 'white',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="">Selecciona un circuito</option>
-                    {circuitos.map(circuito => (
-                      <option key={circuito.id} value={circuito.id}>
-                        {circuito.numero} - {circuito.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </>
+          {formData.departamentoId && (
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label htmlFor="circuitoId" style={{ 
+                display: 'block', 
+                marginBottom: '8px', 
+                color: '#333',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                Circuito Electoral *
+              </label>
+              <select
+                id="circuitoId"
+                name="circuitoId"
+                value={formData.circuitoId}
+                onChange={handleChange}
+                required
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">Selecciona tu circuito</option>
+                {circuitos.map(circuito => (
+                  <option key={circuito.id} value={circuito.id}>
+                    {circuito.numero} - {circuito.nombre}
+                  </option>
+                ))}
+              </select>
+              <small style={{ 
+                color: '#666', 
+                fontSize: '12px',
+                marginTop: '4px',
+                display: 'block'
+              }}>
+                Selecciona el circuito donde vas a votar
+              </small>
+            </div>
           )}
 
           <button 
@@ -906,20 +798,20 @@ const Auth = () => {
               marginTop: '20px'
             }}
           >
-            {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Registrarse')}
+            {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </button>
         </form>
 
         {message && (
-          <div className={`message ${message.includes('Error') || message.includes('inválida') ? 'error' : 'success'}`}
-               style={{
-                 padding: '12px',
-                 borderRadius: '6px',
-                 marginTop: '20px',
-                 backgroundColor: message.includes('Error') || message.includes('inválida') ? '#fee' : '#efe',
-                 color: message.includes('Error') || message.includes('inválida') ? '#c33' : '#060',
-                 border: `1px solid ${message.includes('Error') || message.includes('inválida') ? '#fcc' : '#cfc'}`
-               }}>
+          <div className={`message ${message.includes('Error') || message.includes('inválida') || message.includes('Debes') ? 'error' : 'success'}`}
+              style={{
+                padding: '12px',
+                borderRadius: '6px',
+                marginTop: '20px',
+                backgroundColor: message.includes('Error') || message.includes('inválida') || message.includes('Debes') ? '#fee' : '#efe',
+                color: message.includes('Error') || message.includes('inválida') || message.includes('Debes') ? '#c33' : '#060',
+                border: `1px solid ${message.includes('Error') || message.includes('inválida') || message.includes('Debes') ? '#fcc' : '#cfc'}`
+              }}>
             {message}
           </div>
         )}
@@ -932,12 +824,13 @@ const Auth = () => {
           border: '1px solid #e9ecef'
         }}>
           <h3 style={{ color: '#333', marginBottom: '12px', fontSize: '16px' }}>
-            Información sobre cédulas uruguayas:
+            ℹ️ Información importante:
           </h3>
-          <ul style={{ color: '#666', fontSize: '14px', lineHeight: '1.5' }}>
-            <li>Formato: X.XXX.XXX-X (8 dígitos)</li>
-            <li>Incluye dígito verificador</li>
-            <li>Ejemplos válidos: 1.234.567-8, 4.567.890-1</li>
+          <ul style={{ color: '#666', fontSize: '14px', lineHeight: '1.5', margin: 0 }}>
+            <li>Ingresa tu cédula con formato: X.XXX.XXX-X</li>
+            <li>Selecciona tu departamento y circuito electoral</li>
+            <li>Solo podrás votar una vez por elección</li>
+            <li>Debes votar en el circuito que selecciones</li>
           </ul>
         </div>
       </div>

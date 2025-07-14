@@ -10,4 +10,5 @@ import java.util.List;
 public interface ListaRepository extends JpaRepository<Lista, Long> {
     List<Lista> findByEleccionAndActivaTrueOrderByNumero(Eleccion eleccion);
     List<Lista> findByEleccionIdAndActivaTrueOrderByNumero(Long eleccionId);
+    List<Lista> findByEleccionId(Long eleccionId);
 }

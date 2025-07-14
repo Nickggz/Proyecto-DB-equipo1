@@ -1,66 +1,67 @@
 package com.proyecto.Backend.entity;
 
 import jakarta.persistence.*;
-import java.util.Date;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "usuarios")
 public class Usuario {
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(name = "cedula", unique = true, nullable = false, length = 8)
+    @Column(unique = true, nullable = false, length = 8)
     private String cedula;
     
-    @Column(name = "nombre", nullable = false, length = 100)
+    @Column(name = "credencial_civica", unique = true, length = 20)
+    private String credencialCivica;
+    
+    @Column(nullable = false, length = 100)
     private String nombre;
     
-    @Column(name = "email", unique = true, length = 100)
+    @Column(unique = true, length = 100)
     private String email;
     
     @Column(name = "fecha_registro")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date fechaRegistro;
+    private LocalDateTime fechaRegistro;
+
     
     @ManyToOne
     @JoinColumn(name = "id_circuito")
     private Circuito circuito;
-    
-    // Constructores
-    public Usuario() {
-        this.fechaRegistro = new Date();
-    }
-    
-    public Usuario(String cedula, String nombre, String email) {
+
+    // Constructor vacío
+    public Usuario() {}
+
+    // Constructor con parámetros
+    public Usuario(String cedula, String credencialCivica, String nombre, String email) {
         this.cedula = cedula;
+        this.credencialCivica = credencialCivica;
         this.nombre = nombre;
         this.email = email;
-        this.fechaRegistro = new Date();
+        this.fechaRegistro = LocalDateTime.now();
     }
-    
-    // Getters y setters existentes
+
+    // Getters y Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-    
+
     public String getCedula() { return cedula; }
     public void setCedula(String cedula) { this.cedula = cedula; }
-    
+
+    public String getCredencialCivica() { return credencialCivica; }
+    public void setCredencialCivica(String credencialCivica) { this.credencialCivica = credencialCivica; }
+
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
-    
+
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
-    
-    public Date getFechaRegistro() { return fechaRegistro; }
-    public void setFechaRegistro(Date fechaRegistro) { this.fechaRegistro = fechaRegistro; }
-    
-    // Nuevos getters y setters para circuito
-    public Circuito getCircuito() { 
-        return circuito; 
-    }
-    
-    public void setCircuito(Circuito circuito) { 
-        this.circuito = circuito; 
-    }
+
+    public LocalDateTime getFechaRegistro() { return fechaRegistro; }
+    public void setFechaRegistro(LocalDateTime fechaRegistro) { this.fechaRegistro = fechaRegistro; }
+
+    public Circuito getCircuito() { return circuito; }
+    public void setCircuito(Circuito circuito) { this.circuito = circuito; }
 }
