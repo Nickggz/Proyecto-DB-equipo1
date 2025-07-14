@@ -26,13 +26,19 @@ public class Usuario {
     @Column(name = "fecha_registro")
     private LocalDateTime fechaRegistro;
 
+    // NUEVO: Campo rol usando ENUM
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RolUsuario rol = RolUsuario.VOTANTE;
     
     @ManyToOne
     @JoinColumn(name = "id_circuito")
     private Circuito circuito;
 
     // Constructor vacío
-    public Usuario() {}
+    public Usuario() {
+        this.fechaRegistro = LocalDateTime.now();
+    }
 
     // Constructor con parámetros
     public Usuario(String cedula, String credencialCivica, String nombre, String email) {
@@ -41,9 +47,23 @@ public class Usuario {
         this.nombre = nombre;
         this.email = email;
         this.fechaRegistro = LocalDateTime.now();
+        this.rol = RolUsuario.VOTANTE;
+    }
+    public boolean esPresidenteMesa() {
+        return this.rol == RolUsuario.PRESIDENTE_MESA;
+    }
+    
+    public boolean esMiembroMesa() {
+        return this.rol == RolUsuario.PRESIDENTE_MESA || 
+               this.rol == RolUsuario.SECRETARIO_MESA || 
+               this.rol == RolUsuario.VOCAL_MESA;
+    }
+    
+    public boolean esAdmin() {
+        return this.rol == RolUsuario.ADMIN;
     }
 
-    // Getters y Setters
+    // Getters y Setters (todos los originales + rol)
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -61,6 +81,10 @@ public class Usuario {
 
     public LocalDateTime getFechaRegistro() { return fechaRegistro; }
     public void setFechaRegistro(LocalDateTime fechaRegistro) { this.fechaRegistro = fechaRegistro; }
+
+    // NUEVO: Getter y setter para rol
+    public RolUsuario getRol() { return rol; }
+    public void setRol(RolUsuario rol) { this.rol = rol; }
 
     public Circuito getCircuito() { return circuito; }
     public void setCircuito(Circuito circuito) { this.circuito = circuito; }

@@ -254,7 +254,6 @@ public class VotoController {
             controlVoto.setCiudadano(usuario);  // Solo para control, no para el voto
             controlVoto.setEleccion(eleccion);
             controlVoto.setMesa(mesa);
-            controlVoto.setFechaHoraVoto(LocalDateTime.now());
             
             controlVotoRepository.save(controlVoto);
 

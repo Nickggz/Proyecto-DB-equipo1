@@ -89,6 +89,10 @@ public class AuthController {
             response.put("message", "Login exitoso");
             response.put("nombre", usuario.getNombre());
             response.put("email", usuario.getEmail());
+            response.put("rol", usuario.getRol().toString());
+            response.put("esPresidente", usuario.esPresidenteMesa());
+            response.put("esMiembroMesa", usuario.esMiembroMesa());  
+            response.put("esAdmin", usuario.esAdmin());
             response.put("mesaId", mesaId);
             
             // Incluir información completa del circuito
