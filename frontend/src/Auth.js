@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Componente de votación integrado
 const ComponenteVotacion = ({ usuario, onVolver }) => {
@@ -132,6 +132,9 @@ const ComponenteVotacion = ({ usuario, onVolver }) => {
           
           <p style={{ textAlign: 'center', color: '#666', marginBottom: '30px' }}>
             Votante: {usuario?.nombre || 'Usuario'} (CI: {usuario?.cedula || 'N/A'})
+            {usuario?.circuito && (
+              <><br /><span>Circuito: {usuario.circuito.nombre} ({usuario.circuito.departamento})</span></>
+            )}
           </p>
 
           {elecciones.length > 0 ? (
@@ -227,6 +230,9 @@ const ComponenteVotacion = ({ usuario, onVolver }) => {
             </h3>
             <p style={{ margin: '0', color: '#666' }}>
               Votante: {usuario?.nombre || 'Usuario'} (CI: {usuario?.cedula || 'N/A'})
+              {usuario?.circuito && (
+                <><br /><span>Circuito: {usuario.circuito.nombre} ({usuario.circuito.departamento})</span></>
+              )}
             </p>
           </div>
 
@@ -371,15 +377,63 @@ const ComponenteVotacion = ({ usuario, onVolver }) => {
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [cedula, setCedula] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
+  const [formData, setFormData] = useState({
+    cedula: '',
+    nombre: '',
+    email: '',
+    departamentoId: '',
+    circuitoId: ''
+  });
+  const [departamentos, setDepartamentos] = useState([]);
+  const [circuitos, setCircuitos] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [usuarioLogueado, setUsuarioLogueado] = useState(null);
   const [mostrarVotacion, setMostrarVotacion] = useState(false);
 
   const API_URL = 'http://localhost:8080/api';
+
+  // Cargar departamentos al montar el componente (solo para registro)
+  useEffect(() => {
+    if (!isLogin) {
+      const fetchDepartamentos = async () => {
+        try {
+          const response = await fetch(`${API_URL}/circuito/departamentos`);
+          const data = await response.json();
+          if (data.success) {
+            setDepartamentos(data.departamentos);
+          }
+        } catch (error) {
+          console.error('Error al cargar departamentos:', error);
+        }
+      };
+      
+      fetchDepartamentos();
+    }
+  }, [isLogin]);
+
+  // Cargar circuitos cuando cambia el departamento
+  useEffect(() => {
+    const fetchCircuitos = async () => {
+      if (formData.departamentoId && !isLogin) {
+        try {
+          const response = await fetch(`${API_URL}/circuito/departamento/${formData.departamentoId}`);
+          const data = await response.json();
+          if (data.success) {
+            setCircuitos(data.circuitos);
+          }
+        } catch (error) {
+          console.error('Error al cargar circuitos:', error);
+        }
+      } else {
+        setCircuitos([]);
+      }
+      // Limpiar circuito seleccionado cuando cambia departamento
+      setFormData(prev => ({ ...prev, circuitoId: '' }));
+    };
+    
+    fetchCircuitos();
+  }, [formData.departamentoId, isLogin]);
 
   // Validación de cédula uruguaya
   const validarCedulaUruguaya = (cedula) => {
@@ -409,7 +463,7 @@ const Auth = () => {
   const formatearCedula = (value) => {
     const numeros = value.replace(/\D/g, '');
     
-    if (numeros.length > 8) return cedula;
+    if (numeros.length > 8) return formData.cedula;
     
     if (numeros.length <= 1) return numeros;
     if (numeros.length <= 4) return `${numeros.slice(0, 1)}.${numeros.slice(1)}`;
@@ -417,9 +471,15 @@ const Auth = () => {
     return `${numeros.slice(0, 1)}.${numeros.slice(1, 4)}.${numeros.slice(4, 7)}-${numeros.slice(7)}`;
   };
 
-  const handleCedulaChange = (e) => {
-    const formateada = formatearCedula(e.target.value);
-    setCedula(formateada);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    
+    if (name === 'cedula') {
+      const formateada = formatearCedula(value);
+      setFormData(prev => ({ ...prev, cedula: formateada }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -427,7 +487,7 @@ const Auth = () => {
     setLoading(true);
     setMessage('');
 
-    if (!validarCedulaUruguaya(cedula)) {
+    if (!validarCedulaUruguaya(formData.cedula)) {
       setMessage('Cédula uruguaya inválida');
       setLoading(false);
       return;
@@ -436,11 +496,12 @@ const Auth = () => {
     try {
       const endpoint = isLogin ? '/login' : '/register';
       const data = isLogin 
-        ? { cedula: cedula.replace(/[.-]/g, '') }
+        ? { cedula: formData.cedula.replace(/[.-]/g, '') }
         : { 
-            cedula: cedula.replace(/[.-]/g, ''), 
-            nombre: nombre.trim(),
-            email: email.trim()
+            cedula: formData.cedula.replace(/[.-]/g, ''), 
+            nombre: formData.nombre.trim(),
+            email: formData.email.trim(),
+            circuitoId: formData.circuitoId || null
           };
 
       const response = await fetch(`${API_URL}${endpoint}`, {
@@ -457,15 +518,20 @@ const Auth = () => {
         if (isLogin) {
           setMessage(`¡Bienvenido, ${result.nombre}!`);
           setUsuarioLogueado({
-            cedula: cedula.replace(/[.-]/g, ''),
+            cedula: formData.cedula.replace(/[.-]/g, ''),
             nombre: result.nombre,
-            email: result.email
+            email: result.email,
+            circuito: result.circuito
           });
         } else {
           setMessage('¡Registro exitoso! Ya puedes iniciar sesión.');
-          setCedula('');
-          setNombre('');
-          setEmail('');
+          setFormData({
+            cedula: '',
+            nombre: '',
+            email: '',
+            departamentoId: '',
+            circuitoId: ''
+          });
           setIsLogin(true);
         }
       } else {
@@ -486,9 +552,29 @@ const Auth = () => {
     setUsuarioLogueado(null);
     setMostrarVotacion(false);
     setMessage('');
-    setCedula('');
-    setNombre('');
-    setEmail('');
+    setFormData({
+      cedula: '',
+      nombre: '',
+      email: '',
+      departamentoId: '',
+      circuitoId: ''
+    });
+  };
+
+  const resetForm = () => {
+    setFormData({
+      cedula: '',
+      nombre: '',
+      email: '',
+      departamentoId: '',
+      circuitoId: ''
+    });
+    setMessage('');
+  };
+
+  const toggleMode = () => {
+    setIsLogin(!isLogin);
+    resetForm();
   };
 
   // Si el usuario está logueado y quiere votar, mostrar componente de votación
@@ -522,6 +608,14 @@ const Auth = () => {
           
           <p style={{ color: '#666', marginBottom: '30px' }}>
             Cédula: {usuarioLogueado.cedula}
+            {usuarioLogueado.circuito && (
+              <>
+                <br />
+                Circuito: {usuarioLogueado.circuito.nombre}
+                <br />
+                Departamento: {usuarioLogueado.circuito.departamento}
+              </>
+            )}
           </p>
 
           <button 
@@ -594,13 +688,7 @@ const Auth = () => {
         }}>
           <button 
             className={isLogin ? 'tab active' : 'tab'}
-            onClick={() => {
-              setIsLogin(true);
-              setMessage('');
-              setCedula('');
-              setNombre('');
-              setEmail('');
-            }}
+            onClick={toggleMode}
             style={{
               flex: 1,
               padding: '12px',
@@ -616,13 +704,7 @@ const Auth = () => {
           </button>
           <button 
             className={!isLogin ? 'tab active' : 'tab'}
-            onClick={() => {
-              setIsLogin(false);
-              setMessage('');
-              setCedula('');
-              setNombre('');
-              setEmail('');
-            }}
+            onClick={toggleMode}
             style={{
               flex: 1,
               padding: '12px',
@@ -638,7 +720,7 @@ const Auth = () => {
           </button>
         </div>
 
-        <div onSubmit={handleSubmit} className="auth-form">
+        <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group" style={{ marginBottom: '20px' }}>
             <label htmlFor="cedula" style={{ 
               display: 'block', 
@@ -652,8 +734,9 @@ const Auth = () => {
             <input
               type="text"
               id="cedula"
-              value={cedula}
-              onChange={handleCedulaChange}
+              name="cedula"
+              value={formData.cedula}
+              onChange={handleChange}
               placeholder="1.234.567-8"
               required
               className="form-input"
@@ -690,8 +773,9 @@ const Auth = () => {
                 <input
                   type="text"
                   id="nombre"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
+                  name="nombre"
+                  value={formData.nombre}
+                  onChange={handleChange}
                   placeholder="Tu nombre completo"
                   required
                   className="form-input"
@@ -718,8 +802,9 @@ const Auth = () => {
                 <input
                   type="email"
                   id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
                   placeholder="tu@email.com"
                   required
                   className="form-input"
@@ -732,6 +817,76 @@ const Auth = () => {
                   }}
                 />
               </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label htmlFor="departamentoId" style={{ 
+                  display: 'block', 
+                  marginBottom: '8px', 
+                  color: '#333',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}>
+                  Departamento
+                </label>
+                <select
+                  id="departamentoId"
+                  name="departamentoId"
+                  value={formData.departamentoId}
+                  onChange={handleChange}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '16px',
+                    backgroundColor: 'white',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">Selecciona un departamento</option>
+                  {departamentos.map(dept => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {formData.departamentoId && (
+                <div className="form-group" style={{ marginBottom: '20px' }}>
+                  <label htmlFor="circuitoId" style={{ 
+                    display: 'block', 
+                    marginBottom: '8px', 
+                    color: '#333',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    Circuito Electoral
+                  </label>
+                  <select
+                    id="circuitoId"
+                    name="circuitoId"
+                    value={formData.circuitoId}
+                    onChange={handleChange}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      backgroundColor: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="">Selecciona un circuito</option>
+                    {circuitos.map(circuito => (
+                      <option key={circuito.id} value={circuito.id}>
+                        {circuito.numero} - {circuito.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           )}
 
@@ -739,7 +894,6 @@ const Auth = () => {
             type="submit" 
             disabled={loading}
             className="submit-button"
-            onClick={handleSubmit}
             style={{
               width: '100%',
               padding: '14px',
@@ -754,7 +908,7 @@ const Auth = () => {
           >
             {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Registrarse')}
           </button>
-        </div>
+        </form>
 
         {message && (
           <div className={`message ${message.includes('Error') || message.includes('inválida') ? 'error' : 'success'}`}

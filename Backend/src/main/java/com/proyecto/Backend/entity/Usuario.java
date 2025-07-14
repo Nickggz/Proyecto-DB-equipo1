@@ -23,12 +23,15 @@ public class Usuario {
     @Temporal(TemporalType.TIMESTAMP)
     private Date fechaRegistro;
     
-    // Constructor por defecto
+    @ManyToOne
+    @JoinColumn(name = "id_circuito")
+    private Circuito circuito;
+    
+    // Constructores
     public Usuario() {
         this.fechaRegistro = new Date();
     }
     
-    // Constructor con parámetros
     public Usuario(String cedula, String nombre, String email) {
         this.cedula = cedula;
         this.nombre = nombre;
@@ -36,7 +39,7 @@ public class Usuario {
         this.fechaRegistro = new Date();
     }
     
-    // Getters y setters
+    // Getters y setters existentes
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     
@@ -51,4 +54,13 @@ public class Usuario {
     
     public Date getFechaRegistro() { return fechaRegistro; }
     public void setFechaRegistro(Date fechaRegistro) { this.fechaRegistro = fechaRegistro; }
+    
+    // Nuevos getters y setters para circuito
+    public Circuito getCircuito() { 
+        return circuito; 
+    }
+    
+    public void setCircuito(Circuito circuito) { 
+        this.circuito = circuito; 
+    }
 }
