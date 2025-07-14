@@ -1,0 +1,53 @@
+# Usar imagen base de OpenJDK 17
+FROM openjdk:17-jdk-slim
+
+# Instalar herramientas necesarias
+RUN apt-get update && apt-get install -y \
+    curl \
+    maven \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear directorio de trabajo
+WORKDIR /app
+
+# Copiar archivos de configuración de Maven primero (para cache de dependencias)
+COPY pom.xml .
+COPY mvnw .
+COPY mvnw.cmd .
+COPY .mvn .mvn
+
+# Descargar dependencias (se cachea si pom.xml no cambia)
+RUN mvn dependency:go-offline -B
+
+# Copiar código fuente
+COPY src ./src
+
+# Compilar la aplicación
+RUN mvn clean package -DskipTests
+
+# Crear directorio para la aplicación final
+RUN mkdir -p /opt/electoral
+
+# Copiar el JAR compilado
+RUN cp target/*.jar /opt/electoral/app.jar
+
+# Cambiar al directorio final
+WORKDIR /opt/electoral
+
+# Crear usuario no-root para seguridad
+RUN groupadd -r electoral && useradd -r -g electoral electoral
+RUN chown -R electoral:electoral /opt/electoral
+USER electoral
+
+# Exponer puerto
+EXPOSE 8080
+
+# Configurar JVM para contenedor
+ENV JAVA_OPTS="-Xmx512m -Xms256m -server"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/api/circuito/departamentos || exit 1
+
+# Comando de inicio
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

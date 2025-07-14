@@ -1,10 +1,91 @@
-version: '3.8'
+
+
 services:
+  # Base de datos MySQL
+  database:
+    image: mysql:8.0
+    container_name: electoral_database
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - electoral_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Backend Spring Boot
   backend:
-    build: ./Backend
+    build:
+      context: ./Backend
+      dockerfile: ../docker/dockerfile.backend
+    container_name: electoral_backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: false
+      SERVER_PORT: 8080
     ports:
       - "8080:8080"
-  frontend:
-    build: ./frontend
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - electoral_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/circuito/departamentos"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Build del frontend (solo para generar archivos estáticos)
+  frontend-build:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/dockerfile.frontend
+    container_name: electoral_frontend_build
+    volumes:
+      - frontend_build:/app/build
+    networks:
+      - electoral_network
+    environment:
+      REACT_APP_API_URL: http://localhost/api
+
+  # Servidor web Nginx
+  nginx:
+    image: nginx:alpine
+    container_name: electoral_nginx
+    restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf
+      - frontend_build:/usr/share/nginx/html 
+    depends_on:
+      - backend
+      - frontend-build
+    networks:
+      - electoral_network
+
+volumes:
+  mysql_data:
+    driver: local
+  frontend_build:
+    driver: local
+
+networks:
+  electoral_network:
+    driver: bridge
